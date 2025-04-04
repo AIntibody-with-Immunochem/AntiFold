@@ -134,6 +134,9 @@ class InverseData(torch.utils.data.Dataset):
         pdb_dir: str,
         verbose: int = 1,
     ):
+        print(f'[DEBUG - if1_dataset.py populate()] Starting populate method', flush=True)
+        print(f'[DEBUG - if1_dataset.py populate()] pdbs_csv_or_dataframe: {pdbs_csv_or_dataframe}', flush=True)
+        print(f'[DEBUG - if1_dataset.py populate()] pdb_dir: {pdb_dir}', flush=True)
         """
         Gets the actual PDB paths to be used for training and testing,
         will filter on the PDBs present in the paragraph CSV dict if set.
@@ -145,6 +148,7 @@ class InverseData(torch.utils.data.Dataset):
         # Accept DataFrame or CSV path
         if isinstance(pdbs_csv_or_dataframe, pd.DataFrame):
             df = pdbs_csv_or_dataframe
+            print(f'[DEBUG - if1_dataset.py populate()] Reading in ({len(df)}) PDBs from DataFrame', flush=True)
             log.info(f"Reading in ({len(df)}) PDBs from DataFrame")
         else:
             if not os.path.exists(pdbs_csv_or_dataframe):
@@ -171,15 +175,25 @@ class InverseData(torch.utils.data.Dataset):
 
         # Create list of PDB paths and check that they exist
         pdb_path_list = []
+        print(f'[DEBUG - if1_dataset.py populate()] Creating list of PDB paths', flush=True)
         for _pdb in df["pdb"]:
             pdb_path = f"{pdb_dir}/{_pdb}.pdb"
+            print(f'[DEBUG - if1_dataset.py populate()] Checking for PDB file: {pdb_path}', flush=True)
 
             # Check for PDB/CIF
-            pdb_path = pdb_path if os.path.exists(pdb_path) else f"{pdb_dir}/{_pdb}.cif"
+            if os.path.exists(pdb_path):
+                print(f'[DEBUG - if1_dataset.py populate()] Found PDB file: {pdb_path}', flush=True)
+            else:
+                cif_path = f"{pdb_dir}/{_pdb}.cif"
+                print(f'[DEBUG - if1_dataset.py populate()] Checking for CIF file: {cif_path}', flush=True)
+                pdb_path = cif_path
+            
             pdb_path_list.append(pdb_path)
 
             if not os.path.exists(pdb_path):
-                raise Exception(f"Unable to find PDB/CIF file: {pdb_path}")
+                error_msg = f"Unable to find PDB/CIF file: {pdb_path}"
+                print(f'[ERROR - if1_dataset.py populate()] {error_msg}', flush=True)
+                raise Exception(error_msg)
 
         # Infer order of chain from CSV columns (first item pdb, then chains)
         # Should be Hchain, Lchain, then any order
@@ -223,25 +237,41 @@ class InverseData(torch.utils.data.Dataset):
         # obtain pdb_info for entry with index idx - pdb_info contains the pdb_path (generated in populate)
         Format data to pass to PyTorch DataLoader (with collate_fn = util.CoordBatchConverter)
         """
+        print(f'[DEBUG - if1_dataset.py __getitem__()] Getting item at index: {idx}', flush=True)
+        print(f'[DEBUG - if1_dataset.py __getitem__()] pdb_info: {self.pdb_info_dict[idx]}', flush=True)
 
         # Experimental - use any chains (e.g. with antigen or for ESM-IF1)
         if self.custom_chain_mode:
             pdb_path = self.pdb_info_dict[idx]["pdb_path"]
             chains = self.pdb_info_dict[idx]["chain_order"]
+            print(f'[DEBUG - if1_dataset.py __getitem__()] Using custom_chain_mode with chains: {chains}', flush=True)
 
-            coords, seq_pdb, pos_pdb, pos_pdb_arr_str = self.load_coords_any(
-                pdb_path, chains
-            )
+            try:
+                print(f'[DEBUG - if1_dataset.py __getitem__()] Calling load_coords_any() with pdb_path: {pdb_path}', flush=True)
+                coords, seq_pdb, pos_pdb, pos_pdb_arr_str = self.load_coords_any(
+                    pdb_path, chains
+                )
+                print(f'[DEBUG - if1_dataset.py __getitem__()] load_coords_any() completed successfully', flush=True)
+            except Exception as e:
+                print(f'[ERROR - if1_dataset.py __getitem__()] Exception in load_coords_any(): {e}', flush=True)
+                raise
 
         # Regular mode
         else:
             pdb_path = self.pdb_info_dict[idx]["pdb_path"]
             Hchain = self.pdb_info_dict[idx]["Hchain"]
             Lchain = self.pdb_info_dict[idx]["Lchain"]
+            print(f'[DEBUG - if1_dataset.py __getitem__()] Using regular mode with Hchain: {Hchain}, Lchain: {Lchain}', flush=True)
 
-            coords, seq_pdb, pos_pdb, pos_pdb_arr_str = self.load_coords_HL(
-                pdb_path, Hchain, Lchain,
-            )
+            try:
+                print(f'[DEBUG - if1_dataset.py __getitem__()] Calling load_coords_HL() with pdb_path: {pdb_path}', flush=True)
+                coords, seq_pdb, pos_pdb, pos_pdb_arr_str = self.load_coords_HL(
+                    pdb_path, Hchain, Lchain,
+                )
+                print(f'[DEBUG - if1_dataset.py __getitem__()] load_coords_HL() completed successfully', flush=True)
+            except Exception as e:
+                print(f'[ERROR - if1_dataset.py __getitem__()] Exception in load_coords_HL(): {e}', flush=True)
+                raise
 
         # Not used, included for legacy reasons
         targets = np.full(len(pos_pdb_arr_str), np.nan)

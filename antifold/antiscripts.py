@@ -29,30 +29,31 @@ log = logging.getLogger(__name__)
 amino_list = list("ACDEFGHIKLMNPQRSTVWY")
 
 IMGT_dict = {
+    # 0-based indexing
     "all": range(1, 128 + 1),
     "allH": range(1, 128 + 1),
     "allL": range(1, 128 + 1),
     "FWH": list(range(1, 26 + 1)) + list(range(40, 55 + 1)) + list(range(66, 104 + 1)),
     "FWL": list(range(1, 26 + 1)) + list(range(40, 55 + 1)) + list(range(66, 104 + 1)),
-    "CDRH": list(range(27, 39)) + list(range(56, 65 + 1)) + list(range(105, 117 + 1)),
+    "CDRH": list(range(26, 33 + 1)) + list(range(51, 57 + 1)) + list(range(96, 111 + 1)),
     "CDRL": list(range(27, 39)) + list(range(56, 65 + 1)) + list(range(105, 117 + 1)),
     "FW1": range(1, 26 + 1),
     "FWH1": range(1, 26 + 1),
     "FWL1": range(1, 26 + 1),
     "CDR1": range(27, 39),
-    "CDRH1": range(27, 39),
+    "CDRH1": range(25, 32 + 1), # (resid 26 - 33)
     "CDRL1": range(27, 39),
     "FW2": range(40, 55 + 1),
     "FWH2": range(40, 55 + 1),
     "FWL2": range(40, 55 + 1),
     "CDR2": range(56, 65 + 1),
-    "CDRH2": range(56, 65 + 1),
+    "CDRH2": range(50, 56 + 1), # (resid 51 - 57)
     "CDRL2": range(56, 65 + 1),
     "FW3": range(66, 104 + 1),
     "FWH3": range(66, 104 + 1),
     "FWL3": range(66, 104 + 1),
     "CDR3": range(105, 117 + 1),
-    "CDRH3": range(105, 117 + 1),
+    "CDRH3": range(95, 110 + 1), # (resid 96 - 111)
     "CDRL3": range(105, 117 + 1),
     "FW4": range(118, 128 + 1),
     "FWH4": range(118, 128 + 1),
@@ -102,6 +103,7 @@ def generate_pdbs_csv(pdbs_dir, max_chains=10):
 
 def load_IF1_checkpoint(model, checkpoint_path: str = ""):
     # Load
+    print(f'[DEBUG - antiscripts.py load_IF1_checkpoint()] Loading AntiFold model {checkpoint_path} ...')
     log.debug(f"Loading AntiFold model {checkpoint_path} ...")
 
     # Check for CPU/GPU load
@@ -140,6 +142,7 @@ def load_model(checkpoint_path: str = ""):
     model_path = f"{root_dir}/models/model.pt"
 
     if not os.path.exists(model_path):
+        print(f'[DEBUG - antiscripts.py load_model()] Downloading AntiFold model weights from https://opig.stats.ox.ac.uk/data/downloads/AntiFold/models/model.pt to {model_path}')
         log.warning(
             f"Downloading AntiFold model weights from https://opig.stats.ox.ac.uk/data/downloads/AntiFold/models/model.pt to {model_path}"
         )
@@ -228,6 +231,12 @@ def get_dataset_dataloader(
     pdbs_csv_or_dataframe, pdb_dir, batch_size, custom_chain_mode=False, num_threads=0
 ):
     """Prepares dataset/dataoader from CSV file containing PDB paths and H/L chains"""
+    print('[DEBUG - antiscripts.py get_dataset_dataloader()] Trying to load PDB coordinates', flush=True)
+    print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] pdbs_csv_or_dataframe: {pdbs_csv_or_dataframe}', flush=True)
+    print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] pdb_dir: {pdb_dir}', flush=True)
+    print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] batch_size: {batch_size}', flush=True)
+    print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] custom_chain_mode: {custom_chain_mode}', flush=True)
+
 
     # Set number of threads & workers
     if num_threads >= 1:
@@ -235,10 +244,17 @@ def get_dataset_dataloader(
         num_threads = min(num_threads, 4)
 
     # Load PDB coordinates
-    dataset = InverseData(
-        gaussian_noise_flag=False, custom_chain_mode=custom_chain_mode,
-    )
-    dataset.populate(pdbs_csv_or_dataframe, pdb_dir)
+    try:
+        print('[DEBUG - antiscripts.py get_dataset_dataloader()] Creating InverseData instance', flush=True)
+        dataset = InverseData(
+            gaussian_noise_flag=False, custom_chain_mode=custom_chain_mode,
+        )
+        print('[DEBUG - antiscripts.py get_dataset_dataloader()] Calling dataset.populate()', flush=True)
+        dataset.populate(pdbs_csv_or_dataframe, pdb_dir)
+        print('[DEBUG - antiscripts.py get_dataset_dataloader()] dataset.populate() completed successfully', flush=True)
+    except Exception as e:
+        print(f'[ERROR - antiscripts.py get_dataset_dataloader()] Exception in dataset creation: {e}', flush=True)
+        raise
 
     # Prepare torch dataloader at specified batch size
     alphabet = antifold.esm.data.Alphabet.from_architecture("invariant_gvp")
@@ -446,32 +462,56 @@ def get_pdbs_logits(
     seed=42,
 ):
     """Predict PDBs from a CSV file"""
-
     # if save_flag:
     #    log.info(f"Saving prediction CSVs to {out_dir}")
 
     seed_everything(seed)
 
+    print('[DEBUG - antiscripts.py get_pdbs_logits()] Trying to predict PDBs from a CSV file', flush=True)
+    print(f'[DEBUG - antiscripts.py get_pdbs_logits()] pdbs_csv_or_dataframe: {pdbs_csv_or_dataframe}', flush=True)
+    print(f'[DEBUG - antiscripts.py get_pdbs_logits()] pdb_dir: {pdb_dir}', flush=True)
+    print(f'[DEBUG - antiscripts.py get_pdbs_logits()] batch_size: {batch_size}', flush=True)
+    print(f'[DEBUG - antiscripts.py get_pdbs_logits()] custom_chain_mode: {custom_chain_mode}', flush=True)
+
     # Load PDBs
-    dataset, dataloader = get_dataset_dataloader(
-        pdbs_csv_or_dataframe,
-        pdb_dir,
-        batch_size=batch_size,
-        custom_chain_mode=custom_chain_mode,
-        num_threads=num_threads,
-    )
+    try:
+        print('[DEBUG - antiscripts.py get_pdbs_logits()] Calling get_dataset_dataloader()', flush=True)
+        dataset, dataloader = get_dataset_dataloader(
+            pdbs_csv_or_dataframe,
+            pdb_dir,
+            batch_size=batch_size,
+            custom_chain_mode=custom_chain_mode,
+            num_threads=num_threads,
+        )
+        print('[DEBUG - antiscripts.py get_pdbs_logits()] get_dataset_dataloader() completed successfully', flush=True)
+    except Exception as e:
+        print(f'[ERROR - antiscripts.py get_pdbs_logits()] Exception in get_dataset_dataloader(): {e}', flush=True)
+        raise
 
     # Predict PDBs -> df_logits
-    predictions_list, embeddings_list = dataset_dataloader_to_predictions_list(
-        model,
-        dataset,
-        dataloader,
-        batch_size=batch_size,
-        extract_embeddings=extract_embeddings,
-    )
-    df_logits_list = predictions_list_to_df_logits_list(
-        predictions_list, dataset, dataloader
-    )
+    try:
+        print('[DEBUG - antiscripts.py get_pdbs_logits()] Calling dataset_dataloader_to_predictions_list()', flush=True)
+        predictions_list, embeddings_list = dataset_dataloader_to_predictions_list(
+            model,
+            dataset,
+            dataloader,
+            batch_size=batch_size,
+            extract_embeddings=extract_embeddings,
+        )
+        print('[DEBUG - antiscripts.py get_pdbs_logits()] dataset_dataloader_to_predictions_list() completed successfully', flush=True)
+    except Exception as e:
+        print(f'[ERROR - antiscripts.py get_pdbs_logits()] Exception in dataset_dataloader_to_predictions_list(): {e}', flush=True)
+        raise
+
+    try:
+        print('[DEBUG - antiscripts.py get_pdbs_logits()] Calling predictions_list_to_df_logits_list()', flush=True)
+        df_logits_list = predictions_list_to_df_logits_list(
+            predictions_list, dataset, dataloader
+        )
+        print('[DEBUG - antiscripts.py get_pdbs_logits()] predictions_list_to_df_logits_list() completed successfully', flush=True)
+    except Exception as e:
+        print(f'[ERROR - antiscripts.py get_pdbs_logits()] Exception in predictions_list_to_df_logits_list(): {e}', flush=True)
+        raise
 
     # Save df_logits to CSVs
     if save_flag:
@@ -592,8 +632,8 @@ def pdb_posins_to_pos(pdb_posins):
     return pdb_posins.astype(str).str.extract(r"(\d+)")[0].astype(int).values
 
 
-def get_imgt_mask(df, imgt_regions=["CDR1", "CDR2", "CDR3"]):
-    """Returns e.g. CDR1+2+3 mask"""
+def get_imgt_mask(df, imgt_regions=["CDRH1", "CDRH2", "CDRH3"]):
+    """Returns e.g. CDRH1+2+3 mask"""
 
     positions = pdb_posins_to_pos(df["pdb_posins"])
     region_pos_list = list()
@@ -605,7 +645,7 @@ def get_imgt_mask(df, imgt_regions=["CDR1", "CDR2", "CDR3"]):
             region_pos_list.extend(list(IMGT_dict[region]))
 
     region_mask = pd.Series(positions).isin(region_pos_list).values
-
+    print(f'region_mask: {region_mask}')
     return region_mask
 
 
@@ -652,13 +692,14 @@ def sample_from_df_logits(
     df_logits,
     sample_n=1,
     sampling_temp=0.20,
-    regions_to_mutate=["CDR1", "CDR2", "CDR3"],
+    regions_to_mutate=["CDRH1", "CDRH2", "CDRH3"],
     exclude_heavy=False,
     exclude_light=False,
     limit_expected_variation=False,
     verbose=False,
     seed=42,
 ):
+    print('[DEBUG - antiscripts.py sample_new_sequences_CDR_HL()] regions_to_mutate:', regions_to_mutate)
     # Get original H/L sequence
     H_orig, L_orig = get_df_seqs_HL(df_logits)
 

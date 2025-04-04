@@ -205,19 +205,32 @@ def sample_pdbs(
     seed=42,
     save_flag=False,
 ):
+    print(f'[DEBUG - main.py sample_pdbs()] regions to mutate: {regions_to_mutate}', flush=True)
+    print(f'[DEBUG - main.py sample_pdbs()] pdb_dir: {pdb_dir}', flush=True)
+    print(f'[DEBUG - main.py sample_pdbs()] sampling_temp: {sampling_temp}', flush=True)
+    print(f'[DEBUG - main.py sample_pdbs()] pdbs_csv_or_dataframe: {pdbs_csv_or_dataframe}', flush=True)
+    print(f'[DEBUG - main.py sample_pdbs()] batch_size: {batch_size}', flush=True)
+    print(f'[DEBUG - main.py sample_pdbs()] custom_chain_mode: {custom_chain_mode}', flush=True)
+    
     # Predict with CSV on folder of solved (SAbDab) structures
-    df_logits_list = get_pdbs_logits(
-        model=model,
-        pdbs_csv_or_dataframe=pdbs_csv_or_dataframe,
-        pdb_dir=pdb_dir,
-        out_dir=out_dir,
-        save_flag=save_flag,
-        batch_size=batch_size,
-        extract_embeddings=extract_embeddings,
-        custom_chain_mode=custom_chain_mode,
-        seed=seed,
-        num_threads=num_threads,
-    )
+    try:
+        print('[DEBUG - main.py sample_pdbs()] About to call get_pdbs_logits()', flush=True)
+        df_logits_list = get_pdbs_logits(
+            model=model,
+            pdbs_csv_or_dataframe=pdbs_csv_or_dataframe,
+            pdb_dir=pdb_dir,
+            out_dir=out_dir,
+            save_flag=save_flag,
+            batch_size=batch_size,
+            extract_embeddings=extract_embeddings,
+            custom_chain_mode=custom_chain_mode,
+            seed=seed,
+            num_threads=num_threads,
+        )
+        print('[DEBUG - main.py sample_pdbs()] Successfully called get_pdbs_logits()', flush=True)
+    except Exception as e:
+        print(f'[ERROR - main.py sample_pdbs()] Exception in get_pdbs_logits(): {e}', flush=True)
+        raise
 
     if sample_n >= 1:
         # Sample from output probabilities
@@ -233,7 +246,9 @@ def sample_pdbs(
                 verbose=True,
                 seed=seed,
             )
-
+            
+            print(f'[DEBUG] fasta_dict: {fasta_dict}')
+            
             pdb_output_dict[df_logits.name] = {
                 "sequences": fasta_dict,
                 "logits": df_logits,
@@ -379,6 +394,7 @@ def main(args):
 
         # Nanobody requires custom_chain_mode
         if args.nanobody_chain:
+            print('[DEBUG - main.py] Using a Nanobody PDB File. Setting custom_chain_mode to True')
             args.custom_chain_mode = True
             args.heavy_chain = args.nanobody_chain
 
@@ -402,11 +418,13 @@ def main(args):
 
         # Antigen chain requires custom_chain_mode
         if args.antigen_chain:
+            print('[DEBUG - main.py] Using an Antigen Chain.')
             pdbs_csv.loc[0, "Agchain"] = args.antigen_chain
             args.custom_chain_mode = True
 
         # PDB dir is the directory of the PDB file
         pdb_dir = os.path.dirname(args.pdb_file)
+        print(f'[DEBUG - main.py] PDB dir: {pdb_dir}')
 
     # Option 2: PDB dir and CSV file
     elif args.pdb_dir and args.pdbs_csv:
@@ -425,6 +443,10 @@ def main(args):
         else:
             pdbs_csv = generate_pdbs_csv(args.pdb_dir, max_chains=2)
 
+    print(f'[DEBUG - main.py main()] Predicting {args.num_seq_per_target} seqs per target', flush=True)
+    print(f'[DEBUG - main.py main()] regions_to_mutate: {regions_to_mutate}', flush=True)
+    print(f'[DEBUG - main.py main()] sampling_temp: {args.sampling_temp}', flush=True)
+    print(f'[DEBUG - main.py main()] custom_chain_mode: {args.custom_chain_mode}', flush=True)
     # Extra: Sample sequences with num_seq_per_target >= 1
     if args.num_seq_per_target >= 1:
         log.info(
@@ -433,9 +455,16 @@ def main(args):
 
     # Load AntiFold or ESM-IF1 model
     # Infer model from file path
-    model = load_model(args.model_path)
+    print(f'[DEBUG - main.py main()] Loading model with path: {args.model_path}', flush=True)
+    try:
+        model = load_model(args.model_path)
+        print(f'[DEBUG - main.py main()] Successfully loaded model', flush=True)
+    except Exception as e:
+        print(f'[ERROR - main.py main()] Exception in load_model(): {e}', flush=True)
+        raise
 
     # Get dict with PDBs, sampled sequences and logits / log_odds DataFrame
+    print(f'[DEBUG - main.py main()] Calling sample_pdbs()', flush=True)
     pdb_output_dict = sample_pdbs(
         model=model,
         pdbs_csv_or_dataframe=pdbs_csv,
@@ -486,6 +515,7 @@ if __name__ == "__main__":
     try:
         log.info(f"Running inverse folding on PDB/CIFs ...")
         check_valid_input(args)
+        print(f'[DEBUG - main.py] Using model: {args.model_path}')
         main(args)
 
     except Exception as E:

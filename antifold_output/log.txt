@@ -1,0 +1,20 @@
+[2025-04-03 16:52:47,115] Running inverse folding on PDB/CIFs ...
+[2025-04-03 16:52:47,118] Will sample 10 sequences from 1 PDBs at temperature(s) [0.25] and regions: ['CDRH1', 'CDRH2', 'CDRH3']
+[2025-04-03 16:52:50,390] Loaded model to cuda.
+[2025-04-03 16:52:50,451] NOTE: Custom chain mode enabled. Will run specified chain(s).
+[2025-04-03 16:52:50,451] Reading in (1) PDBs from DataFrame
+[2025-04-03 16:52:50,897] Predicting batch 1/1: PDBs 1-1 out of 1 total
+[2025-04-03 16:52:52,143] Saving 1 CSVs to antifold_output
+[2025-04-03 16:52:52,145] Writing anti_ClfA_design_16_HT per-residue log probs CSV to antifold_output/anti_ClfA_design_16_HT.csv
+[2025-04-03 16:52:52,163] anti_ClfA_design_16_HT: , score=2.0488, global_score=2.0488, regions=['CDRH1', 'CDRH2', 'CDRH3'], model_name=AntiFold, seed=12
+[2025-04-03 16:52:52,171] anti_ClfA_design_16_HT__1: T=0.25, sample=1, score=0.4116, global_score=1.8683, seq_recovery=0.9603, mutations=18
+[2025-04-03 16:52:52,176] anti_ClfA_design_16_HT__2: T=0.25, sample=2, score=0.4350, global_score=1.8701, seq_recovery=0.9603, mutations=18
+[2025-04-03 16:52:52,182] anti_ClfA_design_16_HT__3: T=0.25, sample=3, score=0.3972, global_score=1.8671, seq_recovery=0.9603, mutations=18
+[2025-04-03 16:52:52,188] anti_ClfA_design_16_HT__4: T=0.25, sample=4, score=0.3972, global_score=1.8671, seq_recovery=0.9603, mutations=18
+[2025-04-03 16:52:52,194] anti_ClfA_design_16_HT__5: T=0.25, sample=5, score=0.4062, global_score=1.8678, seq_recovery=0.9603, mutations=18
+[2025-04-03 16:52:52,200] anti_ClfA_design_16_HT__6: T=0.25, sample=6, score=0.4207, global_score=1.8690, seq_recovery=0.9603, mutations=18
+[2025-04-03 16:52:52,206] anti_ClfA_design_16_HT__7: T=0.25, sample=7, score=0.4363, global_score=1.8702, seq_recovery=0.9603, mutations=18
+[2025-04-03 16:52:52,212] anti_ClfA_design_16_HT__8: T=0.25, sample=8, score=0.4247, global_score=1.8693, seq_recovery=0.9625, mutations=17
+[2025-04-03 16:52:52,217] anti_ClfA_design_16_HT__9: T=0.25, sample=9, score=0.3972, global_score=1.8671, seq_recovery=0.9603, mutations=18
+[2025-04-03 16:52:52,223] anti_ClfA_design_16_HT__10: T=0.25, sample=10, score=0.4371, global_score=1.8702, seq_recovery=0.9603, mutations=18
+[2025-04-03 16:52:52,225] Saving to antifold_output/anti_ClfA_design_16_HT.fasta

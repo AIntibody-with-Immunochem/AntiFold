@@ -8,6 +8,7 @@ _temp/
 models/
 output/
 antifold/esm
+log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
