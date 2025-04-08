@@ -13,12 +13,17 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 import numpy as np
 import pandas as pd
 
-from antifold.antiscripts import (df_logits_to_logprobs,
-                                  extract_chains_biotite, generate_pdbs_csv,
-                                  get_pdbs_logits, load_model,
-                                  sample_from_df_logits, write_fasta_to_dir,
-                                  visualize_mutations)
+# from antifold.antiscripts import (df_logits_to_logprobs,
+#                                   extract_chains_biotite, generate_pdbs_csv,
+#                                   get_pdbs_logits, load_model,
+#                                   sample_from_df_logits, write_fasta_to_dir,
+#                                   visualize_mutations)
 
+from antifold.antiscripts_utils import (df_logits_to_logprobs, 
+                                  write_fasta_to_dir,
+                                  visualize_mutations, sample_from_df_logits)
+from antifold.antiscripts import(extract_chains_biotite, generate_pdbs_csv, 
+                                 get_pdbs_logits, load_model)
 log = logging.getLogger(__name__)
 
 
@@ -228,6 +233,7 @@ def sample_pdbs(
             num_threads=num_threads,
         )
         print('[DEBUG - main.py sample_pdbs()] Successfully called get_pdbs_logits()', flush=True)
+        print(f'Output logits: {df_logits_list[0]}', flush=True)
     except Exception as e:
         print(f'[ERROR - main.py sample_pdbs()] Exception in get_pdbs_logits(): {e}', flush=True)
         raise
@@ -426,22 +432,22 @@ def main(args):
         pdb_dir = os.path.dirname(args.pdb_file)
         print(f'[DEBUG - main.py] PDB dir: {pdb_dir}')
 
-    # Option 2: PDB dir and CSV file
-    elif args.pdb_dir and args.pdbs_csv:
-        pdbs_csv = pd.read_csv(args.pdbs_csv, comment="#")
-        pdb_dir = args.pdb_dir
+    # # Option 2: PDB dir and CSV file
+    # elif args.pdb_dir and args.pdbs_csv:
+    #     pdbs_csv = pd.read_csv(args.pdbs_csv, comment="#")
+    #     pdb_dir = args.pdb_dir
 
-    # Option 3: PDB dir and no CSV file (infer chains)
-    else:
-        pdb_dir = args.pdb_dir
+    # # Option 3: PDB dir and no CSV file (infer chains)
+    # else:
+    #     pdb_dir = args.pdb_dir
 
-        # custom_chain_mode consider all (10) chains in file
-        if args.custom_chain_mode:
-            pdbs_csv = generate_pdbs_csv(args.pdb_dir, max_chains=10)
+    #     # custom_chain_mode consider all (10) chains in file
+    #     if args.custom_chain_mode:
+    #         pdbs_csv = generate_pdbs_csv(args.pdb_dir, max_chains=10)
 
-        # Other only consider 1st (heavy) chain and 2nd (light) chain
-        else:
-            pdbs_csv = generate_pdbs_csv(args.pdb_dir, max_chains=2)
+    #     # Other only consider 1st (heavy) chain and 2nd (light) chain
+    #     else:
+    #         pdbs_csv = generate_pdbs_csv(args.pdb_dir, max_chains=2)
 
     print(f'[DEBUG - main.py main()] Predicting {args.num_seq_per_target} seqs per target', flush=True)
     print(f'[DEBUG - main.py main()] regions_to_mutate: {regions_to_mutate}', flush=True)
@@ -464,7 +470,7 @@ def main(args):
         raise
 
     # Get dict with PDBs, sampled sequences and logits / log_odds DataFrame
-    print(f'[DEBUG - main.py main()] Calling sample_pdbs()', flush=True)
+    print(f'\n[DEBUG - main.py main()] Calling sample_pdbs()', flush=True)
     pdb_output_dict = sample_pdbs(
         model=model,
         pdbs_csv_or_dataframe=pdbs_csv,

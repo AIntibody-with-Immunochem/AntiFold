@@ -46,9 +46,8 @@ UPLOADED_FILE="data/nanobody_antigen/anti_ClfA_design_16.pdb"
 NANO_CHAIN="H"
 ANTIGEN_CHAIN="T"
 SAMPLE_NUMBER=10
-SAMPLING_TEMP=0.25
+SAMPLING_TEMP=0.5
 REGIONS="CDRH1 CDRH2 CDRH3"
-LIMIT_VARIATION_STRING=""
 
 # Start the inference
 pwd
@@ -63,8 +62,6 @@ python antifold/main.py \
     --sampling_temp "$SAMPLING_TEMP" \
     --model_path "models/model.pt" \
     --verbose 1 \
-    --seed 12 \
-    $LIMIT_VARIATION_STRING
 
 wait
 echo "Inference complete"

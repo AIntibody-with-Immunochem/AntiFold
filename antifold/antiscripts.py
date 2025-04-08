@@ -1,65 +1,39 @@
 import glob
-import logging
+# import logging
 import os
 import sys
 import warnings
 import urllib.request
 from pathlib import Path
+from collections import OrderedDict
+
+
+import torch
+import torch.nn.functional as F
+
+import numpy as np
+import pandas as pd
+
+from Bio import SeqIO
+from Bio.Seq import Seq
 
 ROOT_PATH = Path(os.path.dirname(__file__)).parent
 sys.path.insert(0, ROOT_PATH)
 
-import re
-from collections import OrderedDict
-
-import numpy as np
-import pandas as pd
-import torch
-import torch.nn.functional as F
-from Bio import SeqIO
-from Bio.Seq import Seq
 from biotite.structure.io import pdb
-
+import re
 import antifold.esm
+
 from antifold.esm_util_custom import CoordBatchConverter_mask_gpu
 from antifold.if1_dataset import InverseData
+from antifold.antiscripts_utils import (calc_pos_perplexity, 
+                                        df_logits_to_logprobs,
+                                        pdb_posins_to_pos,
+                                        df_logits_to_logprobs)
 
-log = logging.getLogger(__name__)
+# log = logging.getLogger(__name__)
 
 amino_list = list("ACDEFGHIKLMNPQRSTVWY")
-
-IMGT_dict = {
-    # 0-based indexing
-    "all": range(1, 128 + 1),
-    "allH": range(1, 128 + 1),
-    "allL": range(1, 128 + 1),
-    "FWH": list(range(1, 26 + 1)) + list(range(40, 55 + 1)) + list(range(66, 104 + 1)),
-    "FWL": list(range(1, 26 + 1)) + list(range(40, 55 + 1)) + list(range(66, 104 + 1)),
-    "CDRH": list(range(26, 33 + 1)) + list(range(51, 57 + 1)) + list(range(96, 111 + 1)),
-    "CDRL": list(range(27, 39)) + list(range(56, 65 + 1)) + list(range(105, 117 + 1)),
-    "FW1": range(1, 26 + 1),
-    "FWH1": range(1, 26 + 1),
-    "FWL1": range(1, 26 + 1),
-    "CDR1": range(27, 39),
-    "CDRH1": range(25, 32 + 1), # (resid 26 - 33)
-    "CDRL1": range(27, 39),
-    "FW2": range(40, 55 + 1),
-    "FWH2": range(40, 55 + 1),
-    "FWL2": range(40, 55 + 1),
-    "CDR2": range(56, 65 + 1),
-    "CDRH2": range(50, 56 + 1), # (resid 51 - 57)
-    "CDRL2": range(56, 65 + 1),
-    "FW3": range(66, 104 + 1),
-    "FWH3": range(66, 104 + 1),
-    "FWL3": range(66, 104 + 1),
-    "CDR3": range(105, 117 + 1),
-    "CDRH3": range(95, 110 + 1), # (resid 96 - 111)
-    "CDRL3": range(105, 117 + 1),
-    "FW4": range(118, 128 + 1),
-    "FWH4": range(118, 128 + 1),
-    "FWL4": range(118, 128 + 1),
-}
-
 
 def extract_chains_biotite(pdb_file):
     """Extract chains in order"""
@@ -104,7 +78,7 @@ def generate_pdbs_csv(pdbs_dir, max_chains=10):
 def load_IF1_checkpoint(model, checkpoint_path: str = ""):
     # Load
     print(f'[DEBUG - antiscripts.py load_IF1_checkpoint()] Loading AntiFold model {checkpoint_path} ...')
-    log.debug(f"Loading AntiFold model {checkpoint_path} ...")
+    # log.debug(f"Loading AntiFold model {checkpoint_path} ...")
 
     # Check for CPU/GPU load
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -143,9 +117,9 @@ def load_model(checkpoint_path: str = ""):
 
     if not os.path.exists(model_path):
         print(f'[DEBUG - antiscripts.py load_model()] Downloading AntiFold model weights from https://opig.stats.ox.ac.uk/data/downloads/AntiFold/models/model.pt to {model_path}')
-        log.warning(
-            f"Downloading AntiFold model weights from https://opig.stats.ox.ac.uk/data/downloads/AntiFold/models/model.pt to {model_path}"
-        )
+        # log.warning(
+        #     f"Downloading AntiFold model weights from https://opig.stats.ox.ac.uk/data/downloads/AntiFold/models/model.pt to {model_path}"
+        # )
         url = "https://opig.stats.ox.ac.uk/data/downloads/AntiFold/models/model.pt"
         filename = model_path
 
@@ -159,9 +133,9 @@ def load_model(checkpoint_path: str = ""):
 
     # Download IF1 weights
     if checkpoint_path == "ESM-IF1":
-        log.info(
-            f"NOTE: Loading ESM-IF1 weights instead of fine-tuned AntiFold weights"
-        )
+        # log.info(
+        #     f"NOTE: Loading ESM-IF1 weights instead of fine-tuned AntiFold weights"
+        # )
         # Suppress regression weights warning - not needed
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -178,7 +152,7 @@ def load_model(checkpoint_path: str = ""):
     # Send to CPU/GPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     _ = model.to(device)
-    log.info(f"Loaded model to {device}.")
+    # log.info(f"Loaded model to {device}.")
 
     return model
 
@@ -251,7 +225,7 @@ def get_dataset_dataloader(
         )
         print('[DEBUG - antiscripts.py get_dataset_dataloader()] Calling dataset.populate()', flush=True)
         dataset.populate(pdbs_csv_or_dataframe, pdb_dir)
-        print('[DEBUG - antiscripts.py get_dataset_dataloader()] dataset.populate() completed successfully', flush=True)
+        print('[DEBUG - antiscripts.py get_dataset_dataloader()] dataset.populate() completed successfully\n', flush=True)
     except Exception as e:
         print(f'[ERROR - antiscripts.py get_dataset_dataloader()] Exception in dataset creation: {e}', flush=True)
         raise
@@ -290,9 +264,9 @@ def dataset_dataloader_to_predictions_list(
         end_index = min(
             start_index + batch_size, len(dataset)
         )  # Adjust for the last batch
-        log.info(
-            f"Predicting batch {bi+1}/{len(dataloader)}: PDBs {start_index+1}-{end_index} out of {len(dataset)} total"
-        )  # -1 because the end_index is exclusive
+        # log.info(
+        #     f"Predicting batch {bi+1}/{len(dataloader)}: PDBs {start_index+1}-{end_index} out of {len(dataset)} total"
+        # )  # -1 because the end_index is exclusive
 
         # Test dataloader
         (
@@ -397,9 +371,10 @@ def predictions_list_to_df_logits_list(all_seqprobs_list, dataset, dataloader):
         Hchain = pdb_chains[0]
         Hpos = positions[pdb_chains == Hchain]
         if 10 in Hpos and not dataset.custom_chain_mode:
-            log.error(
-                f"WARNING: PDB {pdb_name} seems to not be IMGT numbered! Output probabilities may be affected. See https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabpred/anarci/"
-            )
+            # log.error(
+            #     f"WARNING: PDB {pdb_name} seems to not be IMGT numbered! Output probabilities may be affected. See https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabpred/anarci/"
+            # )
+            print(f"WARNING: PDB {pdb_name} seems to not be IMGT numbered! Output probabilities may be affected. See https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabpred/")
         # Limit to IMGT positions only (only ones trained on)
         # imgt_mask = get_imgt_mask(df_logits, imgt_regions=["all"])
         # df_logits = df_logits[imgt_mask]
@@ -414,20 +389,20 @@ def df_logits_list_to_logprob_csvs(
 ):
     """Save df_logits_list to CSVs"""
     os.makedirs(out_dir, exist_ok=True)
-    log.info(f"Saving {len(df_logits_list)} CSVs to {out_dir}")
+    # log.info(f"Saving {len(df_logits_list)} CSVs to {out_dir}")
 
     for i, df in enumerate(df_logits_list):
         # Convert to log-probs
         df_out = df_logits_to_logprobs(df)
         # Save
         outpath = f"{out_dir}/{df.name}.csv"
-        log.info(f"Writing {df.name} per-residue log probs CSV to {outpath}")
+        # log.info(f"Writing {df.name} per-residue log probs CSV to {outpath}")
         df_out.to_csv(outpath, float_format=float_format, index=False)
 
         if embeddings_list:
             # Save embeddingsl
             outpath = f"{out_dir}/{df.name}.npy"
-            log.info(f"Writing {df.name} per-residue embeddings to {outpath}")
+            # log.info(f"Writing {df.name} per-residue embeddings to {outpath}")
             np.save(outpath, embeddings_list[i])
 
 
@@ -467,15 +442,15 @@ def get_pdbs_logits(
 
     seed_everything(seed)
 
-    print('[DEBUG - antiscripts.py get_pdbs_logits()] Trying to predict PDBs from a CSV file', flush=True)
-    print(f'[DEBUG - antiscripts.py get_pdbs_logits()] pdbs_csv_or_dataframe: {pdbs_csv_or_dataframe}', flush=True)
-    print(f'[DEBUG - antiscripts.py get_pdbs_logits()] pdb_dir: {pdb_dir}', flush=True)
-    print(f'[DEBUG - antiscripts.py get_pdbs_logits()] batch_size: {batch_size}', flush=True)
-    print(f'[DEBUG - antiscripts.py get_pdbs_logits()] custom_chain_mode: {custom_chain_mode}', flush=True)
+    # print('[DEBUG - antiscripts.py get_pdbs_logits()] Trying to predict PDBs from a CSV file')
+    # print(f'[DEBUG - antiscripts.py get_pdbs_logits()] pdbs_csv_or_dataframe: {pdbs_csv_or_dataframe}')
+    # print(f'[DEBUG - antiscripts.py get_pdbs_logits()] pdb_dir: {pdb_dir}')
+    # print(f'[DEBUG - antiscripts.py get_pdbs_logits()] batch_size: {batch_size}')
+    # print(f'[DEBUG - antiscripts.py get_pdbs_logits()] custom_chain_mode: {custom_chain_mode}')
 
     # Load PDBs
     try:
-        print('[DEBUG - antiscripts.py get_pdbs_logits()] Calling get_dataset_dataloader()', flush=True)
+        print('\n[DEBUG - antiscripts.py get_pdbs_logits()] Calling get_dataset_dataloader()')
         dataset, dataloader = get_dataset_dataloader(
             pdbs_csv_or_dataframe,
             pdb_dir,
@@ -483,14 +458,14 @@ def get_pdbs_logits(
             custom_chain_mode=custom_chain_mode,
             num_threads=num_threads,
         )
-        print('[DEBUG - antiscripts.py get_pdbs_logits()] get_dataset_dataloader() completed successfully', flush=True)
+        print('[DEBUG - antiscripts.py get_pdbs_logits()] get_dataset_dataloader() completed successfully')
     except Exception as e:
-        print(f'[ERROR - antiscripts.py get_pdbs_logits()] Exception in get_dataset_dataloader(): {e}', flush=True)
+        print(f'[ERROR - antiscripts.py get_pdbs_logits()] Exception in get_dataset_dataloader(): {e}')
         raise
 
     # Predict PDBs -> df_logits
     try:
-        print('[DEBUG - antiscripts.py get_pdbs_logits()] Calling dataset_dataloader_to_predictions_list()', flush=True)
+        print('[DEBUG - antiscripts.py get_pdbs_logits()] Calling dataset_dataloader_to_predictions_list()')
         predictions_list, embeddings_list = dataset_dataloader_to_predictions_list(
             model,
             dataset,
@@ -498,19 +473,19 @@ def get_pdbs_logits(
             batch_size=batch_size,
             extract_embeddings=extract_embeddings,
         )
-        print('[DEBUG - antiscripts.py get_pdbs_logits()] dataset_dataloader_to_predictions_list() completed successfully', flush=True)
+        print('[DEBUG - antiscripts.py get_pdbs_logits()] dataset_dataloader_to_predictions_list() completed successfully')
     except Exception as e:
-        print(f'[ERROR - antiscripts.py get_pdbs_logits()] Exception in dataset_dataloader_to_predictions_list(): {e}', flush=True)
+        print(f'[ERROR - antiscripts.py get_pdbs_logits()] Exception in dataset_dataloader_to_predictions_list(): {e}')
         raise
 
     try:
-        print('[DEBUG - antiscripts.py get_pdbs_logits()] Calling predictions_list_to_df_logits_list()', flush=True)
+        print('[DEBUG - antiscripts.py get_pdbs_logits()] Calling predictions_list_to_df_logits_list()')
         df_logits_list = predictions_list_to_df_logits_list(
             predictions_list, dataset, dataloader
         )
-        print('[DEBUG - antiscripts.py get_pdbs_logits()] predictions_list_to_df_logits_list() completed successfully', flush=True)
+        print('[DEBUG - antiscripts.py get_pdbs_logits()] predictions_list_to_df_logits_list() completed successfully')
     except Exception as e:
-        print(f'[ERROR - antiscripts.py get_pdbs_logits()] Exception in predictions_list_to_df_logits_list(): {e}', flush=True)
+        print(f'[ERROR - antiscripts.py get_pdbs_logits()] Exception in predictions_list_to_df_logits_list(): {e}')
         raise
 
     # Save df_logits to CSVs
@@ -526,345 +501,3 @@ def get_pdbs_logits(
         return df_logits_list, embeddings_list
     else:
         return df_logits_list
-
-
-def calc_pos_perplexity(df):
-    cols = list("ACDEFGHIKLMNPQRSTVWY")
-    t = torch.tensor(df[cols].values)
-    probs = F.softmax(t, dim=1)
-    perplexities = torch.pow(2, -(probs * torch.log2(probs)).sum(dim=1))
-
-    return perplexities.numpy()
-
-
-def sample_new_sequences_CDR_HL(
-    df,
-    t=0.20,
-    imgt_regions=["CDR1", "CDR2", "CDR3"],
-    exclude_heavy=False,
-    exclude_light=False,
-    return_mutation_df=False,
-    limit_expected_variation=True,
-    verbose=False,
-):
-    """Samples new sequences only varying at H/L CDRs"""
-
-    def _sample_cdr_seq(df, imgt_regions, t=0.20):
-        """DF to sampled seq"""
-
-        # CDR1+2+3 mask
-        region_mask = get_imgt_mask(df, imgt_regions)
-
-        # Probabilities after scaling with temp
-        probs = get_temp_probs(df, t=t)
-        probs_cdr = probs[region_mask]
-
-        # Sampled tokens and sequence
-        sampled_tokens = torch.multinomial(probs_cdr, 1).squeeze(-1)
-        sampled_seq = np.array([amino_list[i] for i in sampled_tokens])
-
-        return sampled_seq
-
-    # Prepare to sample new H + L sequences
-    df_H, df_L = get_dfs_HL(df)
-
-    # Get H, sampling only for (CDR1, 2, 3)
-    H_sampled = get_df_seq(df_H)
-
-    regions = [region for region in imgt_regions if "L" not in region]
-    if len(regions) > 0 and not exclude_heavy:
-        region_mask = get_imgt_mask(df_H, regions)
-        H_sampled[region_mask] = _sample_cdr_seq(df_H, regions, t=t)
-
-    # Get L, sampling only for (CDR1, 2, 3)
-    L_sampled = get_df_seq(df_L)
-
-    regions = [region for region in imgt_regions if "H" not in region]
-    if len(regions) > 0 and not exclude_light:
-        region_mask = get_imgt_mask(df_L, regions)
-        L_sampled[region_mask] = _sample_cdr_seq(df_L, regions, t=t)
-
-    # Use for later
-    sampled_seq = np.concatenate([H_sampled, L_sampled])
-    region_mask = get_imgt_mask(df, imgt_regions)
-
-    # Mismatches vs predicted (CDR only)
-    pred_seq = get_df_seq_pred(df)
-    mismatch_idxs_pred_cdr = np.where(
-        (sampled_seq[region_mask] != pred_seq[region_mask])
-    )[0]
-
-    # Mismatches vs original (all)
-    orig_seq = get_df_seq(df)
-    mismatch_idxs_orig = np.where((sampled_seq != orig_seq))[0]
-
-    # Limit mutations (backmutate) to as many expected from temperature sampling
-    if limit_expected_variation:
-        backmutate = len(mismatch_idxs_orig) - len(mismatch_idxs_pred_cdr)
-
-        if backmutate >= 1:
-            backmutate_idxs = np.random.choice(
-                mismatch_idxs_orig, size=backmutate, replace=False
-            )
-            sampled_seq[backmutate_idxs] = orig_seq[backmutate_idxs]
-            H_sampled = sampled_seq[: len(df_H)]
-            L_sampled = sampled_seq[-len(df_L) :]
-
-    # Variables for calculating mismatches
-    sampled_seq = np.concatenate([H_sampled, L_sampled])
-    orig_seq = get_df_seq(df)
-
-    # DataFrame with sampled mutations
-    if return_mutation_df:
-        mut_list = np.where(sampled_seq != orig_seq)[0]
-        df_mut = df.loc[
-            mut_list, ["pdb_res", "top_res", "pdb_posins", "pdb_chain"]
-        ].copy()
-        df_mut.insert(1, "aa_sampled", sampled_seq[mut_list])
-
-        return H_sampled, L_sampled, df_mut
-
-    return H_sampled, L_sampled, df
-
-
-def pdb_posins_to_pos(pdb_posins):
-    # Convert pos+insertion code to numerical only
-    return pdb_posins.astype(str).str.extract(r"(\d+)")[0].astype(int).values
-
-
-def get_imgt_mask(df, imgt_regions=["CDRH1", "CDRH2", "CDRH3"]):
-    """Returns e.g. CDRH1+2+3 mask"""
-
-    positions = pdb_posins_to_pos(df["pdb_posins"])
-    region_pos_list = list()
-
-    for region in imgt_regions:
-        if str(region) not in IMGT_dict.keys():
-            region_pos_list.extend(region)
-        else:
-            region_pos_list.extend(list(IMGT_dict[region]))
-
-    region_mask = pd.Series(positions).isin(region_pos_list).values
-    print(f'region_mask: {region_mask}')
-    return region_mask
-
-
-def get_df_logits(df):
-    cols = list("ACDEFGHIKLMNPQRSTVWY")
-    logits = torch.tensor(df[cols].values)
-
-    return logits
-
-
-def get_temp_probs(df, t=0.20):
-    """Gets temperature scaled probabilities for sampling"""
-
-    logits = get_df_logits(df)
-    temp_logits = logits / np.max([t, 0.001])  # Lower-bound to prevent div by 0
-    temp_probs = F.softmax(temp_logits, dim=1)
-
-    return temp_probs
-
-
-def get_dfs_HL(df):
-    """Split df into heavy and light chains"""
-    Hchain, Lchain = df["pdb_chain"].unique()[:2] # Assume heavy, light
-    return df[df["pdb_chain"] == Hchain], df[df["pdb_chain"] == Lchain]
-
-
-def get_df_seq(df):
-    """Get PDB sequence"""
-    return df["pdb_res"].values
-
-
-def get_df_seq_pred(df):
-    """Get PDB sequence"""
-    return df["top_res"].values
-
-
-def get_df_seqs_HL(df):
-    """Get heavy and light chain sequences"""
-    df_H, df_L = get_dfs_HL(df)
-    return get_df_seq(df_H), get_df_seq(df_L)
-
-
-def sample_from_df_logits(
-    df_logits,
-    sample_n=1,
-    sampling_temp=0.20,
-    regions_to_mutate=["CDRH1", "CDRH2", "CDRH3"],
-    exclude_heavy=False,
-    exclude_light=False,
-    limit_expected_variation=False,
-    verbose=False,
-    seed=42,
-):
-    print('[DEBUG - antiscripts.py sample_new_sequences_CDR_HL()] regions_to_mutate:', regions_to_mutate)
-    # Get original H/L sequence
-    H_orig, L_orig = get_df_seqs_HL(df_logits)
-
-    # Only sampling from heavy, light chains
-    df_logits_HL = df_logits.iloc[:len(H_orig) + len(L_orig), :]
-    df_logits_HL.name = df_logits.name
-
-    # Stats
-    seq = "".join(H_orig) + "".join(L_orig)
-    _, global_score = get_sequence_sampled_global_score(
-        seq, df_logits_HL, regions_to_mutate
-    )
-
-    # Save to FASTA dict
-    fasta_dict = OrderedDict()
-    _id = f"{df_logits_HL.name}"
-    desc = f", score={global_score:.4f}, global_score={global_score:.4f}, regions={regions_to_mutate}, model_name=AntiFold, seed={seed}"
-    seq = "".join(H_orig) + "/" + "".join(L_orig)
-    fasta_dict[_id] = SeqIO.SeqRecord(Seq(seq), id=_id, name="", description=desc)
-
-    if verbose:
-        log.info(f"{_id}: {desc}")
-
-    if not isinstance(sampling_temp, list):
-        sampling_temp = [sampling_temp]
-
-    for t in sampling_temp:
-        # Sample sequences n times
-        for n in range(sample_n):
-            # Get mutated H/L sequence
-            H_mut, L_mut, df_mut = sample_new_sequences_CDR_HL(
-                df_logits_HL,  # DataFrame with residue probabilities
-                t=t,  # Sampling temperature
-                imgt_regions=regions_to_mutate,  # Region to sample
-                exclude_heavy=exclude_heavy,  # Allow mutations in heavy chain
-                exclude_light=exclude_light,  # Allow mutation in light chain
-                limit_expected_variation=limit_expected_variation,  # Only mutate as many positions are expected from temperature
-                verbose=verbose,
-            )
-
-            # Original sequence
-            seq_orig = "".join(H_orig) + "".join(L_orig)
-
-            # Sequence recovery and mismatches
-            correct_matches = (H_orig == H_mut).sum() + (L_orig == L_mut).sum()
-            seq_recovery = correct_matches / len(seq_orig)
-            n_mut = (H_orig != H_mut).sum() + (L_orig != L_mut).sum()
-
-            seq_mut = "".join(H_mut) + "".join(L_mut)
-            score_sampled, global_score = get_sequence_sampled_global_score(
-                seq_mut, df_logits_HL, regions_to_mutate
-            )
-
-            # Save to FASTA dict
-            _id = f"{df_logits_HL.name}__{n+1}"
-            desc = f"T={t:.2f}, sample={n+1}, score={score_sampled:.4f}, global_score={global_score:.4f}, seq_recovery={seq_recovery:.4f}, mutations={n_mut}"
-            seq_mut = "".join(H_mut) + "/" + "".join(L_mut)
-            fasta_dict[_id] = SeqIO.SeqRecord(
-                Seq(seq_mut), id="", name="", description=desc
-            )
-
-            if verbose:
-                log.info(f"{_id}: {desc}")
-
-    return fasta_dict
-
-
-def write_fasta_to_dir(fasta_dict, df_logits, out_dir, verbose=True):
-    """Write fasta to output folder"""
-
-    os.makedirs(out_dir, exist_ok=True)
-    outfile = f"{out_dir}/{df_logits.name}.fasta"
-    if verbose:
-        log.info(f"Saving to {outfile}")
-
-    with open(outfile, "w") as out_handle:
-        SeqIO.write(fasta_dict.values(), out_handle, "fasta")
-
-
-def visualize_mutations(orig, mut, chain=""):
-    """Visualize mutations between two sequences"""
-
-    # Convert to numpy array
-    # (whether string, list, Bio.Seq.Seq or np.array)
-    orig = np.array(list(orig))
-    mut = np.array(list(mut))
-    mismatches = "".join(["X" if match else "_" for match in (orig != mut)])
-
-    # Print
-    print(f"Mutations ({(orig != mut).sum()}):\t{mismatches}")
-    print(f"Original {chain}:\t\t{''.join(orig)}")
-    print(f"Mutated {chain}:\t\t{''.join(mut)}\n")
-
-
-def df_logits_to_probs(df_logits):
-    """Convert logits to probabilities"""
-
-    # Calculate probabilities
-    amino_list = list("ACDEFGHIKLMNPQRSTVWY")
-    t = torch.tensor(df_logits[amino_list].values)
-    probs = F.softmax(t, dim=1)
-
-    # Insert into copied dataframe
-    df_probs = df_logits.copy()
-    df_probs[amino_list] = probs
-
-    return df_probs
-
-
-def df_logits_to_logprobs(df_logits):
-    """Convert logits to probabilities"""
-
-    # Calculate probabilities
-    amino_list = list("ACDEFGHIKLMNPQRSTVWY")
-    t = torch.tensor(df_logits[amino_list].values)
-    probs = F.log_softmax(t, dim=1)
-
-    # Insert into copied dataframe
-    df_probs = df_logits.copy()
-    df_probs[amino_list] = probs
-
-    return df_probs
-
-
-def sequence_to_onehot(sequence):
-    amino_list = list("ACDEFGHIKLMNPQRSTVWY")
-    one_hot = np.zeros((len(sequence), len(amino_list)), dtype=int)
-    for i, res in enumerate(sequence):
-        one_hot[i, amino_list.index(res)] = 1
-    return one_hot
-
-
-def get_sequence_sampled_global_score(seq, df_logits, regions_to_mutate=False):
-    """
-    Get average log probability of sampled / all amino acids
-    """
-
-    def _scores(S, log_probs, mask):
-        criterion = torch.nn.NLLLoss(reduction="none")
-        loss = criterion(
-            log_probs.contiguous().view(-1, log_probs.size(-1)), S.contiguous().view(-1)
-        ).view(S.size())
-        scores = torch.sum(loss * mask, dim=-1) / torch.sum(mask, dim=-1)
-        return scores
-
-    # One-hot to indices
-    onehot = sequence_to_onehot(seq)
-    S = torch.argmax(torch.tensor(onehot, dtype=torch.float), dim=-1)
-
-    # Logits to log probs
-    logits = torch.tensor(df_logits[amino_list].values)
-    log_probs = F.log_softmax(logits, dim=-1)
-
-    # clip probs
-    # log_probs = torch.clamp(log_probs, min=-100, max=100)
-
-    # Calculate log odds scores
-    mask = torch.ones_like(S, dtype=torch.bool)
-    score_global = _scores(S, log_probs, mask)
-
-    if regions_to_mutate:
-        region_mask = get_imgt_mask(df_logits, regions_to_mutate)
-        mask = torch.tensor(region_mask)
-        score_sampled = _scores(S, log_probs, mask)
-    else:
-        score_sampled = score_global
-
-    return score_sampled.item(), score_global.item()
