@@ -171,6 +171,20 @@ python antifold/main.py \
     p.add_argument(
         "--seed", default=42, type=int, help="Seed for reproducibility",
     )
+    
+    p.add_argument(
+        "--resample_polyglycine",
+        default=True,
+        action="store_true",
+        help="Resample polyglycine motifs in CDR regions",
+    )
+    
+    p.add_argument(
+        "--max_polyglycine_iterations",
+        default=5,
+        type=int,
+        help="Maximum number of iterations for polyglycine resampling",
+    )
 
     p.add_argument(
         "--model_path",
@@ -209,6 +223,8 @@ def sample_pdbs(
     num_threads=0,
     seed=42,
     save_flag=False,
+    resample_polyglycine=True,
+    max_polyglycine_iterations=5,
 ):
     print(f'[DEBUG - main.py sample_pdbs()] regions to mutate: {regions_to_mutate}', flush=True)
     print(f'[DEBUG - main.py sample_pdbs()] pdb_dir: {pdb_dir}', flush=True)
@@ -251,7 +267,14 @@ def sample_pdbs(
                 limit_expected_variation=False,
                 verbose=True,
                 seed=seed,
+                resample_polyglycine=resample_polyglycine,  # Use parameter
+                model=model,  # Pass model for resampling
+                pdbs_csv=pdbs_csv_or_dataframe,  # Pass CSV with PDB information
+                pdb_dir=pdb_dir,  # Pass directory containing PDB files
+                max_iterations=max_polyglycine_iterations,  # Use parameter
             )
+            
+            print(f'[DEBUG - main.py sample_pdbs()] Completed polyglycine resampling', flush=True)
             
             print(f'[DEBUG] fasta_dict: {fasta_dict}')
             
@@ -471,6 +494,12 @@ def main(args):
 
     # Get dict with PDBs, sampled sequences and logits / log_odds DataFrame
     print(f'\n[DEBUG - main.py main()] Calling sample_pdbs()', flush=True)
+    # Log polyglycine resampling settings
+    if args.resample_polyglycine:
+        print(f'[DEBUG - main.py main()] Polyglycine resampling enabled with max {args.max_polyglycine_iterations} iterations', flush=True)
+    else:
+        print(f'[DEBUG - main.py main()] Polyglycine resampling disabled', flush=True)
+        
     pdb_output_dict = sample_pdbs(
         model=model,
         pdbs_csv_or_dataframe=pdbs_csv,
@@ -488,6 +517,8 @@ def main(args):
         num_threads=args.num_threads,
         seed=args.seed,
         save_flag=True,
+        resample_polyglycine=args.resample_polyglycine,
+        max_polyglycine_iterations=args.max_polyglycine_iterations,
     )
 
 
