@@ -1,4 +1,19 @@
-[2025-04-09 23:05:20,123] Running inverse folding on PDB/CIFs ...
-[2025-04-09 23:05:20,125] Will sample 10 sequences from 1 PDBs at temperature(s) [0.5] and regions: ['CDRH1', 'CDRH2', 'CDRH3']
-[2025-04-09 23:05:23,852] NOTE: Custom chain mode enabled. Will run specified chain(s).
-[2025-04-09 23:05:23,855] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:29,973] Running inverse folding on PDB/CIFs ...
+[2025-04-10 21:29:29,990] Will sample 10 sequences from 1 PDBs at temperature(s) [0.5] and regions: ['CDRH1', 'CDRH2', 'CDRH3']
+[2025-04-10 21:29:33,924] NOTE: Custom chain mode enabled. Will run specified chain(s).
+[2025-04-10 21:29:33,931] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:36,028] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:36,387] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:36,747] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:37,122] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:37,461] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:37,803] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:38,150] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:38,498] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:38,851] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:39,203] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:39,558] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:39,921] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:40,271] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:40,624] Reading in (1) PDBs from DataFrame
+[2025-04-10 21:29:40,982] Reading in (1) PDBs from DataFrame

@@ -23,6 +23,9 @@ class InverseData(torch.utils.data.Dataset):
     Prepare dataset for ESM-IF1, including span masking and adding gaussian noise, returning
         batches with coords, confidence, strs, tokens, padding_mask
     Returns: coords, confidence, seq, res_pos, loss_mask, targets
+    
+    If custom_sequence is provided, it will be used instead of extracting the sequence from the PDB file.
+    This is useful for resampling polyglycine motifs or other sequence modifications.
     """
 
     def __init__(
@@ -32,6 +35,7 @@ class InverseData(torch.utils.data.Dataset):
         gaussian_noise_flag: bool = True,
         gaussian_scale_A: float = 0.1,
         custom_chain_mode: bool = False,
+        custom_sequence: np.ndarray = None,  # Add parameter for custom sequence
     ):
         # Variables
         self.loss_mask_flag = loss_mask_flag
@@ -40,6 +44,7 @@ class InverseData(torch.utils.data.Dataset):
         self.seq_pdb_fasta_mismatches = 0
         self.custom_chain_mode = custom_chain_mode
         self.verbose = verbose
+        self.custom_sequence = custom_sequence  # Store the custom sequence
 
         if self.custom_chain_mode:
             log.info(
@@ -175,7 +180,7 @@ class InverseData(torch.utils.data.Dataset):
 
         # Create list of PDB paths and check that they exist
         pdb_path_list = []
-        print(f'[DEBUG - if1_dataset.py populate()] Creating list of PDB paths', flush=True)
+        # print(f'[DEBUG - if1_dataset.py populate()] Creating list of PDB paths', flush=True)
         for _pdb in df["pdb"]:
             pdb_path = f"{pdb_dir}/{_pdb}.pdb"
             print(f'[DEBUG - if1_dataset.py populate()] Checking for PDB file: {pdb_path}', flush=True)
@@ -273,6 +278,19 @@ class InverseData(torch.utils.data.Dataset):
                 print(f'[ERROR - if1_dataset.py __getitem__()] Exception in load_coords_HL(): {e}', flush=True)
                 raise
 
+        # If custom sequence is provided, use it instead of the one from PDB
+        if self.custom_sequence is not None:
+            print(f'[DEBUG - if1_dataset.py __getitem__()] Using custom sequence instead of PDB sequence given as {self.custom_sequence}', flush=True)
+            
+            # Convert numpy array to string if needed
+            if isinstance(self.custom_sequence, np.ndarray):
+                # Join the array elements into a single string
+                custom_seq_str = ''.join(self.custom_sequence)
+                print(f'[DEBUG - if1_dataset.py __getitem__()] Converted numpy array to string: {custom_seq_str}', flush=True)
+                seq_pdb = custom_seq_str
+            else:
+                seq_pdb = self.custom_sequence
+        
         # Not used, included for legacy reasons
         targets = np.full(len(pos_pdb_arr_str), np.nan)
 

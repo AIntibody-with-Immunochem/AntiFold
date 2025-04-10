@@ -2,44 +2,41 @@ import glob
 # import logging
 import os
 import sys
-import warnings
-import urllib.request
 from pathlib import Path
-from collections import OrderedDict
-
-
 import torch
-import torch.nn.functional as F
 
 import numpy as np
 import pandas as pd
-
-from Bio import SeqIO
-from Bio.Seq import Seq
+import torch.nn.functional as F
 
 ROOT_PATH = Path(os.path.dirname(__file__)).parent
 sys.path.insert(0, ROOT_PATH)
 
-from biotite.structure.io import pdb
-import re
 import antifold.esm
 
 from antifold.esm_util_custom import CoordBatchConverter_mask_gpu
 from antifold.if1_dataset import InverseData
-from antifold.antiscripts_utils import (calc_pos_perplexity, 
-                                        df_logits_to_logprobs,
-                                        pdb_posins_to_pos,
-                                        df_logits_to_logprobs)
+from antifold.general_utils import (calc_pos_perplexity, pdb_posins_to_pos, seed_everything,
+                                     extract_chains_biotite)
 
 # log = logging.getLogger(__name__)
 
 amino_list = list("ACDEFGHIKLMNPQRSTVWY")
 
-def extract_chains_biotite(pdb_file):
-    """Extract chains in order"""
-    pdbf = pdb.PDBFile.read(pdb_file)
-    structure = pdb.get_structure(pdbf, model=1)
-    return pd.unique(structure.chain_id)
+
+def df_logits_to_logprobs(df_logits):
+    """Convert logits to probabilities"""
+
+    # Calculate probabilities
+    amino_list = list("ACDEFGHIKLMNPQRSTVWY")
+    t = torch.tensor(df_logits[amino_list].values)
+    probs = F.log_softmax(t, dim=1)
+
+    # Insert into copied dataframe
+    df_probs = df_logits.copy()
+    df_probs[amino_list] = probs
+
+    return df_probs
 
 
 def generate_pdbs_csv(pdbs_dir, max_chains=10):
@@ -73,89 +70,6 @@ def generate_pdbs_csv(pdbs_dir, max_chains=10):
         pdbs_csv.loc[i, _cols] = row
 
     return pdbs_csv
-
-
-def load_IF1_checkpoint(model, checkpoint_path: str = ""):
-    # Load
-    print(f'[DEBUG - antiscripts.py load_IF1_checkpoint()] Loading AntiFold model {checkpoint_path} ...')
-    # log.debug(f"Loading AntiFold model {checkpoint_path} ...")
-
-    # Check for CPU/GPU load
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    checkpoint_dict = torch.load(checkpoint_path, map_location=torch.device(device))
-
-    # PYL checkpoint ?
-    if "model_state_dict" in checkpoint_dict.keys():
-        pretrained_dict = {
-            re.sub("model.", "", k): v
-            for k, v in checkpoint_dict["model_state_dict"].items()
-        }
-
-    # PYL checkpoint ?
-    elif "state_dict" in checkpoint_dict.keys():
-        # Remove "model." from keys
-        pretrained_dict = {
-            re.sub("model.", "", k): v for k, v in checkpoint_dict["state_dict"].items()
-        }
-
-    # IF1-raw?
-    else:
-        pretrained_dict = checkpoint_dict
-
-    # Load pretrained weights
-    model.load_state_dict(pretrained_dict)
-
-    return model
-
-
-def load_model(checkpoint_path: str = ""):
-    """Load raw/FT IF1 model"""
-
-    # Check that AntiFold weights are downloaded
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    model_path = f"{root_dir}/models/model.pt"
-
-    if not os.path.exists(model_path):
-        print(f'[DEBUG - antiscripts.py load_model()] Downloading AntiFold model weights from https://opig.stats.ox.ac.uk/data/downloads/AntiFold/models/model.pt to {model_path}')
-        # log.warning(
-        #     f"Downloading AntiFold model weights from https://opig.stats.ox.ac.uk/data/downloads/AntiFold/models/model.pt to {model_path}"
-        # )
-        url = "https://opig.stats.ox.ac.uk/data/downloads/AntiFold/models/model.pt"
-        filename = model_path
-
-        os.makedirs(f"{root_dir}/models", exist_ok=True)
-        urllib.request.urlretrieve(url, filename)
-
-    if not os.path.exists(model_path) and not checkpoint_path == "ESM-IF1":
-        raise Exception(
-            f"Unable to find model weights. File does not exist: {checkpoint_path}"
-        )
-
-    # Download IF1 weights
-    if checkpoint_path == "ESM-IF1":
-        # log.info(
-        #     f"NOTE: Loading ESM-IF1 weights instead of fine-tuned AntiFold weights"
-        # )
-        # Suppress regression weights warning - not needed
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            model, _ = antifold.esm.pretrained.esm_if1_gvp4_t16_142M_UR50()
-
-    # Load AntiFold weights locally
-    else:
-        model, _ = antifold.esm.pretrained._load_IF1_local()
-        model = load_IF1_checkpoint(model, model_path)
-
-    # Evaluation mode when predicting
-    model = model.eval()
-
-    # Send to CPU/GPU
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    _ = model.to(device)
-    # log.info(f"Loaded model to {device}.")
-
-    return model
-
 
 def get_dataset_pdb_name_chainsname_res_posins_chains(dataset, idx):
     """Gets PDB sequence, position+insertion codes and chains from dataset"""
@@ -202,14 +116,23 @@ def logits_to_seqprobs_list(logits, tokens):
 
 
 def get_dataset_dataloader(
-    pdbs_csv_or_dataframe, pdb_dir, batch_size, custom_chain_mode=False, num_threads=0
+    pdbs_csv_or_dataframe, pdb_dir, batch_size, custom_chain_mode=False, num_threads=0, custom_sequence=None,
+    gaussian_noise_flag=False, gaussian_scale_A=0.1
 ):
-    """Prepares dataset/dataoader from CSV file containing PDB paths and H/L chains"""
+    """
+    Prepares dataset/dataloader from CSV file containing PDB paths and H/L chains.
+    
+    If custom_sequence is provided, it will be used instead of extracting the sequence from the PDB file.
+    This is useful for resampling polyglycine motifs or other sequence modifications.
+    
+    When gaussian_noise_flag is True, Gaussian noise will be added to the coordinates
+    for data augmentation, which can help improve the robustness of the model.
+    """
     print('[DEBUG - antiscripts.py get_dataset_dataloader()] Trying to load PDB coordinates', flush=True)
-    print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] pdbs_csv_or_dataframe: {pdbs_csv_or_dataframe}', flush=True)
-    print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] pdb_dir: {pdb_dir}', flush=True)
-    print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] batch_size: {batch_size}', flush=True)
-    print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] custom_chain_mode: {custom_chain_mode}', flush=True)
+    # print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] pdbs_csv_or_dataframe: {pdbs_csv_or_dataframe}', flush=True)
+    # print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] pdb_dir: {pdb_dir}', flush=True)
+    # print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] batch_size: {batch_size}', flush=True)
+    # print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] custom_chain_mode: {custom_chain_mode}', flush=True)
 
 
     # Set number of threads & workers
@@ -220,8 +143,21 @@ def get_dataset_dataloader(
     # Load PDB coordinates
     try:
         print('[DEBUG - antiscripts.py get_dataset_dataloader()] Creating InverseData instance', flush=True)
+        if custom_sequence is not None:
+            # Handle both string and iterable cases
+            if isinstance(custom_sequence, str):
+                print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] Using custom sequence (string): {custom_sequence}', flush=True)
+            else:
+                try:
+                    print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] Using custom sequence (iterable): {"".join(custom_sequence)}', flush=True)
+                except:
+                    print(f'[DEBUG - antiscripts.py get_dataset_dataloader()] Using custom sequence (unknown type): {custom_sequence}', flush=True)
+        
         dataset = InverseData(
-            gaussian_noise_flag=False, custom_chain_mode=custom_chain_mode,
+            gaussian_noise_flag=gaussian_noise_flag,
+            gaussian_scale_A=gaussian_scale_A,
+            custom_chain_mode=custom_chain_mode,
+            custom_sequence=custom_sequence,  # Pass the custom sequence if provided
         )
         print('[DEBUG - antiscripts.py get_dataset_dataloader()] Calling dataset.populate()', flush=True)
         dataset.populate(pdbs_csv_or_dataframe, pdb_dir)
@@ -406,23 +342,6 @@ def df_logits_list_to_logprob_csvs(
             np.save(outpath, embeddings_list[i])
 
 
-def seed_everything(seed: int):
-    # https://gist.github.com/ihoromi4/b681a9088f348942b01711f251e5f964
-    import os
-    import random
-
-    import numpy as np
-    import torch
-
-    random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True
-
-
 def get_pdbs_logits(
     model,
     pdbs_csv_or_dataframe,
@@ -441,13 +360,7 @@ def get_pdbs_logits(
     #    log.info(f"Saving prediction CSVs to {out_dir}")
 
     seed_everything(seed)
-
-    # print('[DEBUG - antiscripts.py get_pdbs_logits()] Trying to predict PDBs from a CSV file')
-    # print(f'[DEBUG - antiscripts.py get_pdbs_logits()] pdbs_csv_or_dataframe: {pdbs_csv_or_dataframe}')
-    # print(f'[DEBUG - antiscripts.py get_pdbs_logits()] pdb_dir: {pdb_dir}')
-    # print(f'[DEBUG - antiscripts.py get_pdbs_logits()] batch_size: {batch_size}')
-    # print(f'[DEBUG - antiscripts.py get_pdbs_logits()] custom_chain_mode: {custom_chain_mode}')
-
+    
     # Load PDBs
     try:
         print('\n[DEBUG - antiscripts.py get_pdbs_logits()] Calling get_dataset_dataloader()')

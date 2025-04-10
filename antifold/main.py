@@ -19,11 +19,12 @@ import pandas as pd
 #                                   sample_from_df_logits, write_fasta_to_dir,
 #                                   visualize_mutations)
 
-from antifold.antiscripts_utils import (df_logits_to_logprobs, 
+from antifold.antiscripts_utils import (
                                   write_fasta_to_dir,
-                                  visualize_mutations, sample_from_df_logits)
-from antifold.antiscripts import(extract_chains_biotite, generate_pdbs_csv, 
-                                 get_pdbs_logits, load_model)
+                                   sample_from_df_logits)
+from antifold.antiscripts import(df_logits_to_logprobs, generate_pdbs_csv, get_pdbs_logits)
+    
+from antifold.general_utils import (extract_chains_biotite, load_model)
 log = logging.getLogger(__name__)
 
 
